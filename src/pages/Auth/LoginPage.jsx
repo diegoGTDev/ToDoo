@@ -1,4 +1,4 @@
-import todooLogo from "../assets/todoo-logo.png";
+import todooLogo from "../../assets/todoo-logo.png";
 
 export default function LoginPage() {
   return (
