@@ -30,7 +30,8 @@ pnpm preview  # Vista local de la compilación
 - Ordenar con **Subir** y **Bajar**, también disponibles con teclado y en pantallas táctiles. Durante una búsqueda, se ordenan las tarjetas visibles.
 - Buscar por título o descripción sin distinguir mayúsculas. Los contadores muestran las coincidencias respecto al total de la columna.
 - Filtrar por **Prioridad**, **Responsable** o **Solo mis tareas**, combinables con la búsqueda. Ver [Filtros del tablero](#filtros-del-tablero).
-- Recuperar las tareas, sus estados y su orden después de recargar o navegar fuera del tablero.
+- Comentar dentro de cada tarea para que el equipo discuta sin salir del sistema. Ver [Comentarios por tarea](#comentarios-por-tarea).
+- Recuperar las tareas, sus estados, su orden y sus comentarios después de recargar o navegar fuera del tablero.
 
 Al crear una tarea se limpian la búsqueda y los filtros para mostrarla en **Por hacer**. La página muestra los estados vacíos y los avisos de acciones.
 
@@ -42,16 +43,22 @@ src/
 ├── components/Tareas/
 │   ├── TareaCard.jsx             # Tarjeta, edición, confirmación y controles
 │   ├── TareaForm.jsx             # Formulario para crear y editar
-│   └── FiltrosTablero.jsx        # Búsqueda y filtros del tablero
+│   ├── FiltrosTablero.jsx        # Búsqueda y filtros del tablero
+│   └── ComentariosTarea.jsx      # Conversación de una tarea
 ├── constants/tareas.js           # Prioridades y equipo temporal
 ├── components/Nav/NavBar.jsx     # Navegación compartida
 ├── services/tareasStorage.js     # Lectura, validación y guardado local
 ├── services/tareasApi.js         # Cliente de la API de tareas filtradas (aún sin usar)
+├── services/comentariosStorage.js # Lectura, validación y guardado local de comentarios
+├── services/comentariosApi.js    # Cliente de la API de comentarios (aún sin usar)
+├── utils/comentarios.js          # Reglas de los comentarios, iguales a las del backend
 ├── utils/filtrarTareas.js        # Filtros con la misma semántica que la API
 └── utils/moverTarea.js           # Movimiento y posición de una tarjeta
 tests/
 ├── tareasStorage.test.js
 ├── filtrarTareas.test.js
+├── comentarios.test.js
+├── comentariosStorage.test.js
 └── moverTarea.test.js
 ```
 
@@ -100,6 +107,19 @@ Las tareas sin responsable solo aparecen cuando no se filtra por responsable. Co
 
 **Backend.** `Backend/main` ofrece `GET /api/proyectos/{id}/tareas?prioridad=&responsableId=&soloMias=` y `GET /api/proyectos/{id}/responsables`. "Solo mis tareas" lo resuelve el servidor con el `usuarioId` de la sesión, sin aceptar un id del navegador. `services/tareasApi.js` ya traduce los filtros a esos parámetros y adapta la respuesta al formato del tablero; los pasos para conectarlo están en `docs/requisitos-pendientes.md`.
 
+## Comentarios por tarea
+
+Cada tarjeta tiene un botón **Comentarios (n)** que abre la conversación de esa tarea, con el nombre del autor y la fecha de cada mensaje.
+
+- Publicar con **Publicar comentario**: el texto se recorta y debe tener entre 1 y 1000 caracteres.
+- **Editar** y **Eliminar** aparecen solo en los comentarios propios. Eliminar pide confirmación y editar muestra "· editado". Escape cancela la edición.
+- La conversación va del comentario más antiguo al más reciente. Al eliminar una tarea se elimina también su conversación.
+- Los comentarios se guardan en `localStorage` con la clave `todoo.kanban.comentarios`, con la misma recuperación de datos dañados y aviso de reintento que las tareas.
+
+**Datos temporales.** Mientras no existan login ni API de usuarios, el autor de cada comentario es `USUARIO_ACTUAL_ID` y los nombres salen de `MIEMBROS_EQUIPO` (`constants/tareas.js`). Por eso en el modo local solo el autor puede editar o eliminar; en el backend un administrador del proyecto también puede eliminar (moderar).
+
+**Backend.** `Backend/main` ofrece, bajo `/api/proyectos/{proyectoId}/tareas/{tareaId}/comentarios`, `GET` (listar), `POST` (publicar), `PATCH /{id}` (editar) y `DELETE /{id}` (eliminar). El autor se toma de la sesión, nunca del cuerpo. `services/comentariosApi.js` ya traduce esas llamadas y adapta la respuesta al formato del componente; los pasos para conectarlo están en `docs/requisitos-pendientes.md`.
+
 ## Notificaciones
 
 La rama `notificaciones` se integra conservando las rutas existentes de inicio, autenticación, proyectos y tablero. La bandeja está en `/notificaciones` y se puede abrir desde la navegación compartida.
@@ -135,14 +155,15 @@ El arrastre utiliza la función nativa del navegador; en dispositivos donde no e
 6. Asignar prioridades y responsables. Filtrar por prioridad, por responsable y con **Solo mis tareas**, combinarlos con la búsqueda y comprobar los contadores; **Limpiar filtros** muestra de nuevo todas las tareas.
 7. Cancelar una eliminación y después confirmarla. Recargar y comprobar tareas, estados, orden y eliminaciones.
 8. Navegar por Inicio, Proyectos y Tablero sin perder las tareas.
+9. Abrir **Comentarios** en una tarea, publicar un comentario vacío (debe rechazarse) y uno con texto. Editarlo, cancelar y confirmar una eliminación, recargar y comprobar que la conversación y el contador se conservan. Eliminar la tarea y comprobar en `localStorage` que sus comentarios desaparecen.
 
 Las diez pruebas automáticas cubren recuperación sin sobrescribir datos dañados, IDs duplicados, validación de campos, cuota excedida y reintento, persistencia del orden, movimiento entre columnas y destinos inexistentes.
 
-Otras cuatro pruebas verifican el resumen de proyectos: sin tareas, por comenzar, avance parcial y completado. Cinco pruebas cubren las solicitudes del cliente de notificaciones, incluyendo sesión, token CSRF y errores. Los filtros añaden cinco pruebas de `filtrarTareas`, una de compatibilidad con tareas antiguas y tres del cliente `tareasApi`. En total, `pnpm test` ejecuta 28 pruebas. Desde `Backend/main`, `mvnw.cmd test` ejecuta otras 18 pruebas con H2, ocho de ellas para la API de tareas filtradas.
+Otras cuatro pruebas verifican el resumen de proyectos: sin tareas, por comenzar, avance parcial y completado. Cinco pruebas cubren las solicitudes del cliente de notificaciones, incluyendo sesión, token CSRF y errores. Los filtros añaden cinco pruebas de `filtrarTareas`, una de compatibilidad con tareas antiguas y tres del cliente `tareasApi`. Los comentarios añaden seis pruebas de las reglas (`comentarios.test.js`), cinco de guardado y recuperación y cuatro del cliente `comentariosApi`. En total, `pnpm test` ejecuta 43 pruebas. Desde `Backend/main`, `mvnw.cmd test` ejecuta otras 28 pruebas con H2: ocho de la API de tareas filtradas y diez de la API de comentarios (sesión, CSRF, permisos de autor y administrador, proyectos ajenos y tareas archivadas).
 
 ## Commits y reversión
 
-El desarrollo está separado en commits en las ramas `Tablero` y `Filtros`. Consulta `git log --oneline` para identificar un paso. Para deshacer un commit conservando el historial:
+El desarrollo está separado en commits en las ramas `Tablero`, `Filtros` y `Comentarios`. Consulta `git log --oneline` para identificar un paso. Para deshacer un commit conservando el historial:
 
 ```sh
 git revert <hash-del-commit>
