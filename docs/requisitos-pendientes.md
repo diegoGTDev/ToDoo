@@ -52,3 +52,27 @@ Para conectar el tablero cuando existan la base, el login y la API para crear y 
 2. Cargar las tareas con `getTareas(proyectoId, filtros)` de `services/tareasApi.js` en lugar de `cargarTablero`. La búsqueda de texto sigue aplicándose en el navegador con `filtrarTareas`.
 3. `adaptarTarea` convierte la respuesta al formato del tablero. Las tarjetas pueden mostrar `responsableNombre` en lugar de buscar el nombre en `MIEMBROS_EQUIPO`.
 4. El frontend usa `PROYECTO_PRINCIPAL.id = 'principal'`; la API espera un id numérico de `proyectos`.
+
+## Comentarios por tarea (rama `Comentarios`)
+
+Cada tarea tiene una conversación para el equipo. El tablero guarda los comentarios en `localStorage`; el backend ya expone la API equivalente, pero el frontend todavía no la usa. Esta rama parte de `main` y sigue `database/propuesta_mysql.sql`: la tabla `comentarios` con `tarea_id`, que la propuesta ya prevé.
+
+- `GET /api/proyectos/{proyectoId}/tareas/{tareaId}/comentarios` devuelve la conversación del más antiguo al más reciente. Cada comentario trae `autor { id, nombre }`, `contenido`, `fecha_creacion`, `fecha_actualizacion`, `editado` y `puede_modificar` (calculado por el servidor para el usuario de la sesión).
+- `POST` publica (`{ "contenido": "..." }`, entre 1 y 1000 caracteres tras recortar espacios; responde 201). `PATCH /{id}` edita y `DELETE /{id}` elimina (204).
+- El autor se toma siempre de la sesión. Solo edita el autor (403 para otra persona); eliminan el autor o un miembro con rol `administrador`.
+- Exigen el atributo de sesión `usuarioId` (401) y ser miembro activo del proyecto (404, para no revelar proyectos ajenos). Una tarea que no pertenece al proyecto, o un comentario que no pertenece a la tarea, responden 404. Una tarea archivada se puede leer, pero publicar o editar responde 409.
+- POST, PATCH y DELETE exigen el encabezado `X-CSRF-TOKEN`. Se reutiliza la sesión del módulo de notificaciones: el token se pide con `GET /api/notificaciones/csrf`. Si el login definitivo trae su propio manejo de CSRF, solo debe cambiarse `ComentarioWebConfig` y `tokenCsrf()` en `comentariosApi.js`.
+
+Todo el SQL está en `com.todoo.comentarios.ComentarioRepository`. Si el esquema definitivo cambia nombres de tablas o columnas, solo ese archivo y `src/test/resources/comentarios_schema.sql` deben ajustarse. Las pruebas usan H2; las consultas no se han ejecutado contra un MySQL real. Detalles a tener en cuenta al revisar el esquema:
+
+- `fecha_creacion` y `fecha_actualizacion` se escriben explícitamente con el mismo valor al publicar, y `editado` se calcula comparándolas. No depender de los `DEFAULT CURRENT_TIMESTAMP(6)`, porque dos valores por defecto pueden diferir en microsegundos.
+- El límite de 1000 caracteres se valida en la aplicación (`NuevoComentario`); la columna `contenido` de la propuesta es `TEXT`. Se puede agregar un `CHECK` si el equipo quiere reforzarlo en la base.
+- Eliminar un comentario lo borra de verdad. Si el equipo prefiere conservar el historial, hay que agregar una columna de archivado y ajustar `eliminar` y `listar`.
+- No se crean notificaciones al comentar: la propuesta de notificaciones solo cubre asignaciones. Avisar al responsable de la tarea o a quien participa en la conversación queda pendiente de decisión; el punto de enganche sería `ComentarioService.crear`, dentro de la misma transacción, igual que `notificarAsignacion`.
+
+Para conectar el tablero cuando existan la base, el login y las tareas en MySQL:
+
+1. Cargar la conversación al abrir una tarjeta con `getComentarios(proyectoId, tareaId)`, en lugar de `conversacionDeTarea` sobre `localStorage`. El formato de vista es el mismo que devuelve `adaptarComentario`.
+2. Reemplazar `agregarComentario`, `editarComentario` y `eliminarComentario` de `KanbanPage.jsx` por `crearComentario`, `editarComentario` y `eliminarComentario` de `services/comentariosApi.js`, y actualizar la lista con el comentario devuelto. Los mensajes de error de la API ya están en español y listos para mostrarse.
+3. Quitar `comentariosStorage.js` y `utils/comentarios.js` cuando ya no se usen. `puedeModificar` pasa a venir del servidor, así que ya no hace falta `USUARIO_ACTUAL_ID` para los comentarios.
+4. Los ids de la API son numéricos: el tablero actual usa UUID como id de tarea y `'principal'` como proyecto, igual que en los filtros.

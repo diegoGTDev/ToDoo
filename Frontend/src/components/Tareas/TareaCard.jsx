@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import TareaForm from './TareaForm'
+import ComentariosTarea from './ComentariosTarea'
 import { MIEMBROS_EQUIPO, PRIORIDADES } from '../../constants/tareas'
 
-export default function TareaCard({ tarea, estados, onCambiarEstado, onEditar, onEliminar, onIniciarArrastre, onFinalizarArrastre, onSubir, onBajar, arrastrando, onSoltar }){
+export default function TareaCard({ tarea, estados, onCambiarEstado, onEditar, onEliminar, onIniciarArrastre, onFinalizarArrastre, onSubir, onBajar, arrastrando, onSoltar, comentarios = [], onComentar, onEditarComentario, onEliminarComentario }){
   const [editando, setEditando] = useState(false)
+  const [mostrarComentarios, setMostrarComentarios] = useState(false)
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
 
   const prioridad = PRIORIDADES.find((opcion) => opcion.id === tarea.prioridad)
@@ -136,6 +138,25 @@ export default function TareaCard({ tarea, estados, onCambiarEstado, onEditar, o
       >
         Eliminar tarea
       </button>
+      <button
+        type="button"
+        onClick={() => setMostrarComentarios((visible) => !visible)}
+        aria-expanded={mostrarComentarios}
+        aria-controls={`comentarios-${tarea.id}`}
+        className="mt-3 block rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+      >
+        {mostrarComentarios ? 'Ocultar comentarios' : 'Comentarios'} ({comentarios.length})
+      </button>
+      {mostrarComentarios && (
+        <ComentariosTarea
+          id={`comentarios-${tarea.id}`}
+          tituloTarea={tarea.title}
+          comentarios={comentarios}
+          onComentar={onComentar}
+          onEditar={onEditarComentario}
+          onEliminar={onEliminarComentario}
+        />
+      )}
         </>
       )}
     </article>
