@@ -5,8 +5,12 @@ import TareaForm from '../../components/Tareas/TareaForm'
 import FiltrosTablero from '../../components/Tareas/FiltrosTablero'
 import { MIEMBROS_EQUIPO, USUARIO_ACTUAL_ID } from '../../constants/tareas'
 import { cargarTablero, guardarTareas } from '../../services/tareasStorage'
+import { cargarComentarios, guardarComentarios } from '../../services/comentariosStorage'
 import { moverTarea } from '../../utils/moverTarea'
 import { FILTROS_VACIOS, filtrarTareas, hayFiltrosActivos } from '../../utils/filtrarTareas'
+import {
+  agregarComentario, conversacionDeTarea, editarComentario, eliminarComentario, eliminarComentariosDeTarea,
+} from '../../utils/comentarios'
 
 const columns = [
   { id: 'todo', name: 'Por hacer' },
@@ -17,6 +21,8 @@ const columns = [
 export default function KanbanPage() {
   const [tablero, setTablero] = useState(() => cargarTablero())
   const { tareas, error } = tablero
+  const [conversaciones, setConversaciones] = useState(() => cargarComentarios())
+  const { comentarios, error: errorComentarios } = conversaciones
   const [tareaArrastrada, setTareaArrastrada] = useState(null)
   const [columnaDestino, setColumnaDestino] = useState(null)
   const [filtros, setFiltros] = useState(FILTROS_VACIOS)
@@ -32,6 +38,33 @@ export default function KanbanPage() {
 
   function reintentarGuardado() {
     setTablero({ tareas, error: guardarTareas(tareas) })
+  }
+
+  function setComentarios(actualizar) {
+    const nuevos = actualizar(comentarios)
+    if (nuevos === comentarios) return
+    setConversaciones({ comentarios: nuevos, error: guardarComentarios(nuevos) })
+  }
+
+  function reintentarGuardadoComentarios() {
+    setConversaciones({ comentarios, error: guardarComentarios(comentarios) })
+  }
+
+  function comentar(tareaId, contenido) {
+    setComentarios((actuales) => agregarComentario(actuales, {
+      id: crypto.randomUUID(), tareaId, autorId: USUARIO_ACTUAL_ID, contenido, ahora: new Date(),
+    }))
+    setMensaje('Comentario publicado.')
+  }
+
+  function editarComentarioTarea(comentarioId, contenido) {
+    setComentarios((actuales) => editarComentario(actuales, comentarioId, USUARIO_ACTUAL_ID, contenido, new Date()))
+    setMensaje('Comentario actualizado.')
+  }
+
+  function eliminarComentarioTarea(comentarioId) {
+    setComentarios((actuales) => eliminarComentario(actuales, comentarioId, USUARIO_ACTUAL_ID))
+    setMensaje('Comentario eliminado.')
   }
 
   function crearTarea(datos) {
@@ -60,6 +93,8 @@ export default function KanbanPage() {
 
   function eliminarTarea(tareaId) {
     setTareas((actuales) => actuales.filter((tarea) => tarea.id !== tareaId))
+    // La conversación de una tarea eliminada no tiene a dónde pertenecer.
+    setComentarios((actuales) => eliminarComentariosDeTarea(actuales, tareaId))
     setMensaje('Tarea eliminada.')
   }
 
@@ -103,6 +138,14 @@ export default function KanbanPage() {
             <p>{error}</p>
             <button type="button" onClick={reintentarGuardado} className="mt-2 rounded px-3 py-2 font-semibold underline">
               Guardar tablero actual
+            </button>
+          </div>
+        )}
+        {errorComentarios && (
+          <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>{errorComentarios}</p>
+            <button type="button" onClick={reintentarGuardadoComentarios} className="mt-2 rounded px-3 py-2 font-semibold underline">
+              Guardar comentarios actuales
             </button>
           </div>
         )}
@@ -162,6 +205,10 @@ export default function KanbanPage() {
                       onCambiarEstado={cambiarEstado}
                       onEditar={editarTarea}
                       onEliminar={eliminarTarea}
+                      comentarios={conversacionDeTarea(comentarios, tarea.id, USUARIO_ACTUAL_ID, MIEMBROS_EQUIPO)}
+                      onComentar={(contenido) => comentar(tarea.id, contenido)}
+                      onEditarComentario={editarComentarioTarea}
+                      onEliminarComentario={eliminarComentarioTarea}
                       onIniciarArrastre={setTareaArrastrada}
                       onFinalizarArrastre={finalizarArrastre}
                       arrastrando={Boolean(tareaArrastrada)}
